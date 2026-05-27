@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Presificador Pro - Sistema Multi-Usuário</title>
+    <title>Precificador Pro - Sistema Multi-Usuário</title>
     
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -487,7 +487,7 @@
         <div id="loginSection">
             <div class="login-container">
                 <div class="login-card">
-                    <div class="logo" style="font-size: 2rem;">PRESIFICADOR</div>
+                    <div class="logo" style="font-size: 2rem;">Precificador</div>
                     <div class="logo-sub">PRO</div>
                     <h2 style="margin-top: 20px;">Acesse sua conta</h2>
                     <input type="email" id="loginEmail" class="login-input" placeholder="E-mail">
@@ -504,7 +504,7 @@
         <div id="registerSection" style="display: none;">
             <div class="login-container">
                 <div class="login-card">
-                    <div class="logo" style="font-size: 2rem;">PRESIFICADOR</div>
+                    <div class="logo" style="font-size: 2rem;">Precificador</div>
                     <div class="logo-sub">PRO</div>
                     <h2 style="margin-top: 20px;">Criar conta</h2>
                     <input type="email" id="registerEmail" class="login-input" placeholder="E-mail">
@@ -528,18 +528,18 @@
             </div>
 
             <div class="header">
-                <div class="logo">PRESIFICADOR</div>
+                <div class="logo">Precificador</div>
                 <div class="logo-sub">PRO</div>
                 <div class="tagline">PRECISÃO · ESTRATÉGIA · LUCRO</div>
             </div>
 
             <div class="nav-tabs">
-                <button class="nav-btn active" onclick="switchTab('presificador')">💰 PRESIFICADOR</button>
+                <button class="nav-btn active" onclick="switchTab('Precificador')">💰 Precificador</button>
                 <button class="nav-btn" onclick="switchTab('vendas')">📊 VENDAS</button>
             </div>
 
-            <!-- Presificador Page -->
-            <div id="presificadorPage" class="page active">
+            <!-- Precificador Page -->
+            <div id="PrecificadorPage" class="page active">
                 <div class="card">
                     <div class="card-title">1. IMPORTAÇÃO</div>
                     <div class="switch-container">
@@ -700,9 +700,9 @@
         // ==================== CONFIGURAÇÃO DO FIREBASE ====================
         const firebaseConfig = {
             apiKey: "AIzaSyBTAcO3jDpZooK1e1L-O3C4un5ZjkXeKF8",
-            authDomain: "presificador---pro.firebaseapp.com",
-            projectId: "presificador---pro",
-            storageBucket: "presificador---pro.firebasestorage.app",
+            authDomain: "Precificador---pro.firebaseapp.com",
+            projectId: "Precificador---pro",
+            storageBucket: "Precificador---pro.firebasestorage.app",
             messagingSenderId: "518617301523",
             appId: "1:518617301523:web:70ae4560de03f206d1f5e6"
         };
@@ -844,7 +844,7 @@
             }
         });
 
-        // ==================== FUNÇÕES DO PRESIFICADOR ====================
+        // ==================== FUNÇÕES DO Precificador ====================
         function toggleDolar() {
             const isChecked = document.getElementById('dolarToggle').checked;
             const dolarFields = document.getElementById('dolarFields');
@@ -1108,9 +1108,9 @@
         function fecharModal(id) { document.getElementById(id).style.display = 'none'; }
 
         function switchTab(tab) {
-            document.getElementById('presificadorPage').classList.toggle('active', tab === 'presificador');
+            document.getElementById('PrecificadorPage').classList.toggle('active', tab === 'Precificador');
             document.getElementById('vendasPage').classList.toggle('active', tab === 'vendas');
-            document.querySelectorAll('.nav-btn').forEach((btn, i) => btn.classList.toggle('active', (tab === 'presificador' && i === 0) || (tab === 'vendas' && i === 1)));
+            document.querySelectorAll('.nav-btn').forEach((btn, i) => btn.classList.toggle('active', (tab === 'Precificador' && i === 0) || (tab === 'vendas' && i === 1)));
             if (tab === 'vendas') atualizarTabelaVendas();
         }
 
