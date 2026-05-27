@@ -163,6 +163,7 @@
             font-weight: bold;
             cursor: pointer;
             font-size: 1rem;
+            transition: all 0.3s ease;
         }
 
         .btn-login:hover {
@@ -177,6 +178,22 @@
         .switch-auth a {
             color: #FFD700;
             cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .forgot-password {
+            margin-top: 15px;
+            text-align: right;
+        }
+
+        .forgot-password a {
+            color: #FFA500;
+            cursor: pointer;
+            font-size: 0.85rem;
+            text-decoration: none;
+        }
+
+        .forgot-password a:hover {
             text-decoration: underline;
         }
 
@@ -374,6 +391,12 @@
             transform: translateY(-2px);
         }
 
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            margin: 0 3px;
+        }
+
         .btn-group {
             display: flex;
             gap: 10px;
@@ -473,16 +496,60 @@
             display: block;
         }
 
+        .status-offline {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #ff6b6b;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            display: none;
+            z-index: 2000;
+        }
+
+        .product-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(26, 26, 27, 0.8);
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .product-item:hover {
+            background: rgba(42, 107, 42, 0.3);
+        }
+
+        .product-info {
+            flex: 1;
+        }
+
+        .product-actions {
+            display: flex;
+            gap: 5px;
+        }
+
         @media (max-width: 768px) {
             .logo { font-size: 2rem; }
             .btn-group { flex-direction: column; }
             .btn { width: 100%; }
             .user-bar { flex-direction: column; text-align: center; }
+            .product-item { flex-direction: column; gap: 10px; }
+            .product-actions { width: 100%; justify-content: center; }
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- Status Offline -->
+        <div id="offlineStatus" class="status-offline">
+            ⚠️ Modo Offline - Dados salvos localmente
+        </div>
+
         <!-- Login Section -->
         <div id="loginSection">
             <div class="login-container">
@@ -493,6 +560,9 @@
                     <input type="email" id="loginEmail" class="login-input" placeholder="E-mail">
                     <input type="password" id="loginPassword" class="login-input" placeholder="Senha">
                     <button class="btn-login" onclick="login()">Entrar</button>
+                    <div class="forgot-password">
+                        <a onclick="showResetPassword()">Esqueceu a senha?</a>
+                    </div>
                     <div class="switch-auth">
                         Não tem uma conta? <a onclick="showRegister()">Criar conta grátis</a>
                     </div>
@@ -512,6 +582,23 @@
                     <button class="btn-login" onclick="register()">Criar conta</button>
                     <div class="switch-auth">
                         Já tem uma conta? <a onclick="showLogin()">Fazer login</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reset Password Section -->
+        <div id="resetSection" style="display: none;">
+            <div class="login-container">
+                <div class="login-card">
+                    <div class="logo" style="font-size: 2rem;">Precificador</div>
+                    <div class="logo-sub">PRO</div>
+                    <h2 style="margin-top: 20px;">Recuperar Senha</h2>
+                    <p style="color: #aaa; margin-bottom: 20px;">Digite seu e-mail para receber o link de recuperação</p>
+                    <input type="email" id="resetEmail" class="login-input" placeholder="E-mail cadastrado">
+                    <button class="btn-login" onclick="sendPasswordReset()">Enviar link de recuperação</button>
+                    <div class="switch-auth">
+                        <a onclick="showLogin()">Voltar para o login</a>
                     </div>
                 </div>
             </div>
@@ -700,9 +787,9 @@
         // ==================== CONFIGURAÇÃO DO FIREBASE ====================
         const firebaseConfig = {
             apiKey: "AIzaSyBTAcO3jDpZooK1e1L-O3C4un5ZjkXeKF8",
-            authDomain: "Precificador---pro.firebaseapp.com",
-            projectId: "Precificador---pro",
-            storageBucket: "Precificador---pro.firebasestorage.app",
+            authDomain: "precificador-pro.firebaseapp.com",
+            projectId: "precificador-pro",
+            storageBucket: "precificador-pro.firebasestorage.app",
             messagingSenderId: "518617301523",
             appId: "1:518617301523:web:70ae4560de03f206d1f5e6"
         };
@@ -711,21 +798,77 @@
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
+        
+        // Configurar Firestore para persistência offline
+        db.enablePersistence()
+            .catch((err) => {
+                if (err.code == 'failed-precondition') {
+                    console.log('Persistência offline já ativa');
+                } else if (err.code == 'unimplemented') {
+                    console.log('Persistência offline não suportada');
+                }
+            });
 
         // Variáveis globais
         let currentUser = null;
         let userData = { produtos: [], vendas: [] };
         let descontoRules = { 1: 0, 5: 5, 10: 10, 50: 15 };
+        let isOnline = navigator.onLine;
+
+        // Monitorar status da conexão
+        window.addEventListener('online', () => {
+            isOnline = true;
+            document.getElementById('offlineStatus').style.display = 'none';
+            if (currentUser) {
+                sincronizarDadosOffline();
+            }
+        });
+        
+        window.addEventListener('offline', () => {
+            isOnline = false;
+            document.getElementById('offlineStatus').style.display = 'block';
+        });
 
         // ==================== AUTENTICAÇÃO ====================
         function showRegister() {
             document.getElementById('loginSection').style.display = 'none';
             document.getElementById('registerSection').style.display = 'block';
+            document.getElementById('resetSection').style.display = 'none';
         }
 
         function showLogin() {
             document.getElementById('registerSection').style.display = 'none';
             document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('resetSection').style.display = 'none';
+        }
+
+        function showResetPassword() {
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('registerSection').style.display = 'none';
+            document.getElementById('resetSection').style.display = 'block';
+        }
+
+        async function sendPasswordReset() {
+            const email = document.getElementById('resetEmail').value;
+            
+            if (!email) {
+                alert('Digite seu e-mail!');
+                return;
+            }
+
+            try {
+                await auth.sendPasswordResetEmail(email);
+                alert('✅ Link de recuperação enviado para o e-mail!\n\nVerifique sua caixa de entrada e spam.');
+                showLogin();
+                document.getElementById('resetEmail').value = '';
+            } catch (error) {
+                console.error('Erro ao enviar recuperação:', error);
+                if (error.code === 'auth/user-not-found') {
+                    alert('❌ E-mail não encontrado. Verifique se está cadastrado.');
+                } else {
+                    alert('❌ Erro ao enviar recuperação: ' + error.message);
+                }
+            }
         }
 
         async function register() {
@@ -746,7 +889,7 @@
                 const userCredential = await auth.createUserWithEmailAndPassword(email, password);
                 const user = userCredential.user;
                 
-                await db.collection('users').doc(user.uid).set({
+                const dadosIniciais = {
                     email: email,
                     produtos: [
                         { id: 1, nome: "Conta Instagram Premium", valor: 45.00 },
@@ -756,14 +899,21 @@
                     vendas: [
                         { id: 1, produto_id: 1, produto_nome: "Conta Instagram Premium", quantidade: 2, valor_unitario: 45.00, valor_total: 90.00, data: new Date().toISOString(), cancelada: false }
                     ]
-                });
+                };
                 
-                alert('Conta criada com sucesso! Faça login.');
+                try {
+                    await db.collection('users').doc(user.uid).set(dadosIniciais);
+                } catch (error) {
+                    console.log('Offline: salvando dados localmente');
+                    localStorage.setItem(`user_${user.uid}`, JSON.stringify(dadosIniciais));
+                }
+                
+                alert('✅ Conta criada com sucesso! Faça login.');
                 showLogin();
                 document.getElementById('registerEmail').value = '';
                 document.getElementById('registerPassword').value = '';
             } catch (error) {
-                alert('Erro ao criar conta: ' + error.message);
+                alert('❌ Erro ao criar conta: ' + error.message);
             }
         }
 
@@ -777,16 +927,33 @@
             }
 
             try {
-                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                const loginPromise = auth.signInWithEmailAndPassword(email, password);
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout de conexão')), 10000)
+                );
+                
+                const userCredential = await Promise.race([loginPromise, timeoutPromise]);
                 currentUser = userCredential.user;
                 await carregarDadosUsuario();
                 mostrarApp();
             } catch (error) {
-                alert('Erro ao fazer login: ' + error.message);
+                console.error('Erro detalhado:', error);
+                if (error.message.includes('offline') || error.message.includes('Timeout')) {
+                    alert('❌ Erro de conexão! Verifique sua internet e tente novamente.');
+                } else if (error.code === 'auth/user-not-found') {
+                    alert('❌ Usuário não encontrado!');
+                } else if (error.code === 'auth/wrong-password') {
+                    alert('❌ Senha incorreta!');
+                } else {
+                    alert('❌ Erro ao fazer login: ' + error.message);
+                }
             }
         }
 
         async function logout() {
+            if (currentUser) {
+                localStorage.removeItem(`user_${currentUser.uid}`);
+            }
             await auth.signOut();
             currentUser = null;
             document.getElementById('mainApp').style.display = 'none';
@@ -799,36 +966,77 @@
         async function carregarDadosUsuario() {
             if (!currentUser) return;
             
-            const doc = await db.collection('users').doc(currentUser.uid).get();
-            if (doc.exists) {
-                userData = doc.data();
-            } else {
-                userData = {
-                    email: currentUser.email,
-                    produtos: [
-                        { id: 1, nome: "Conta Instagram Premium", valor: 45.00 },
-                        { id: 2, nome: "Conta TikTok Seguida", valor: 30.00 },
-                        { id: 3, nome: "E-mail Corporativo", valor: 15.00 }
-                    ],
-                    vendas: [
-                        { id: 1, produto_id: 1, produto_nome: "Conta Instagram Premium", quantidade: 2, valor_unitario: 45.00, valor_total: 90.00, data: new Date().toISOString(), cancelada: false }
-                    ]
-                };
-                await db.collection('users').doc(currentUser.uid).set(userData);
+            try {
+                const doc = await db.collection('users').doc(currentUser.uid).get();
+                if (doc.exists) {
+                    userData = doc.data();
+                } else {
+                    throw new Error('Documento não encontrado');
+                }
+            } catch (error) {
+                console.log('Erro ao carregar do Firestore, tentando cache local:', error);
+                const localData = localStorage.getItem(`user_${currentUser.uid}`);
+                if (localData) {
+                    userData = JSON.parse(localData);
+                    console.log('Dados carregados do cache local');
+                } else {
+                    userData = {
+                        email: currentUser.email,
+                        produtos: [
+                            { id: 1, nome: "Conta Instagram Premium", valor: 45.00 },
+                            { id: 2, nome: "Conta TikTok Seguida", valor: 30.00 },
+                            { id: 3, nome: "E-mail Corporativo", valor: 15.00 }
+                        ],
+                        vendas: [
+                            { id: 1, produto_id: 1, produto_nome: "Conta Instagram Premium", quantidade: 2, valor_unitario: 45.00, valor_total: 90.00, data: new Date().toISOString(), cancelada: false }
+                        ]
+                    };
+                }
             }
         }
 
         async function salvarDadosUsuario() {
             if (!currentUser) return;
-            await db.collection('users').doc(currentUser.uid).update(userData);
+            
+            localStorage.setItem(`user_${currentUser.uid}`, JSON.stringify(userData));
+            
+            if (isOnline) {
+                try {
+                    await db.collection('users').doc(currentUser.uid).update(userData);
+                    console.log('Dados sincronizados com o servidor');
+                } catch (error) {
+                    console.log('Erro ao sincronizar, dados salvos localmente:', error);
+                }
+            } else {
+                console.log('Offline: dados salvos apenas localmente');
+            }
+        }
+
+        async function sincronizarDadosOffline() {
+            if (!currentUser) return;
+            
+            const localData = localStorage.getItem(`user_${currentUser.uid}`);
+            if (localData) {
+                try {
+                    await db.collection('users').doc(currentUser.uid).update(JSON.parse(localData));
+                    console.log('Sincronização offline concluída');
+                } catch (error) {
+                    console.log('Erro na sincronização:', error);
+                }
+            }
         }
 
         function mostrarApp() {
             document.getElementById('loginSection').style.display = 'none';
             document.getElementById('registerSection').style.display = 'none';
+            document.getElementById('resetSection').style.display = 'none';
             document.getElementById('mainApp').style.display = 'block';
             document.getElementById('userEmail').innerHTML = currentUser.email;
             document.getElementById('userAvatar').innerHTML = currentUser.email.charAt(0).toUpperCase();
+            
+            if (!isOnline) {
+                document.getElementById('offlineStatus').style.display = 'block';
+            }
             
             toggleDolar();
             atualizarTabelaVendas();
@@ -873,7 +1081,9 @@
         function converterDolar() {
             const dolar = parseFloat(document.getElementById('valorDolar').value);
             const cotacao = parseFloat(document.getElementById('cotacaoDolar').value);
-            document.getElementById('vlrBase').value = (dolar * cotacao).toFixed(2);
+            if (!isNaN(dolar) && !isNaN(cotacao)) {
+                document.getElementById('vlrBase').value = (dolar * cotacao).toFixed(2);
+            }
         }
 
         function getDescontoPercent(quantidade) {
@@ -898,17 +1108,22 @@
             const valorTotal = valorFinalUnit * quantidade;
 
             document.getElementById('resultadoArea').innerHTML = `
-                QUANTIDADE: ${quantidade} ITENS<br>
-                TOTAL: R$ ${valorTotal.toFixed(2).replace('.', ',')}<br>
-                ----------------------------<br>
-                CUSTO (C/ REVENDA): R$ ${precoCusto.toFixed(2).replace('.', ',')}<br>
-                UNIT. FINAL: R$ ${valorFinalUnit.toFixed(2).replace('.', ',')}<br>
-                DESC. APLICADO: ${desconto}%
+                📊 RESULTADO DO CÁLCULO<br>
+                ═══════════════════════<br>
+                📦 Quantidade: ${quantidade} itens<br>
+                💰 TOTAL: R$ ${valorTotal.toFixed(2).replace('.', ',')}<br>
+                ═══════════════════════<br>
+                📈 Custo (c/ revenda): R$ ${precoCusto.toFixed(2).replace('.', ',')}<br>
+                🏷️ Unitário final: R$ ${valorFinalUnit.toFixed(2).replace('.', ',')}<br>
+                🎯 Desconto aplicado: ${desconto}%<br>
+                💵 Margem de lucro: ${margemLucro}%
             `;
         }
 
         // ==================== FUNÇÕES DE VENDAS ====================
         function atualizarTabelaVendas() {
+            if (!userData || !userData.vendas) return;
+            
             const periodo = document.getElementById('filtroPeriodo').value;
             const hoje = new Date();
             let dataInicio, dataFim;
@@ -951,7 +1166,7 @@
         function renderizarTabela(vendasList) {
             const tbody = document.getElementById('tabelaVendasBody');
             tbody.innerHTML = '';
-            if (vendasList.length === 0) {
+            if (!vendasList || vendasList.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Nenhuma venda encontrada</td></tr>';
                 return;
             }
@@ -980,6 +1195,10 @@
         function aplicarFiltroPersonalizado() {
             const inicio = new Date(document.getElementById('dataInicio').value);
             const fim = new Date(document.getElementById('dataFim').value);
+            if (isNaN(inicio) || isNaN(fim)) {
+                alert('Selecione as datas corretamente!');
+                return;
+            }
             fim.setHours(23, 59, 59, 999);
             const vendasAtivas = userData.vendas.filter(v => !v.cancelada);
             const vendasFiltradas = vendasAtivas.filter(v => new Date(v.data) >= inicio && new Date(v.data) <= fim);
@@ -996,55 +1215,92 @@
 
         function atualizarListaProdutosModal() {
             const container = document.getElementById('listaProdutos');
+            if (!container) return;
+            
             container.innerHTML = '';
+            if (!userData.produtos || userData.produtos.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #aaa;">Nenhum produto cadastrado</p>';
+                return;
+            }
+            
             userData.produtos.forEach(p => {
-                container.innerHTML += `<div style="display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #444;">
-                    <span>📦 ${p.nome} - R$ ${p.valor.toFixed(2)}</span>
-                    <div><button class="btn btn-secondary btn-sm" onclick="editarProduto(${p.id})">✏️</button>
-                    <button class="btn btn-danger btn-sm" onclick="excluirProduto(${p.id})">🗑️</button></div>
-                </div>`;
+                const productDiv = document.createElement('div');
+                productDiv.className = 'product-item';
+                productDiv.innerHTML = `
+                    <div class="product-info">
+                        📦 <strong>${p.nome}</strong> - R$ ${p.valor.toFixed(2).replace('.', ',')}
+                    </div>
+                    <div class="product-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="editarProduto(${p.id})">✏️ Editar</button>
+                        <button class="btn btn-danger btn-sm" onclick="excluirProduto(${p.id})">🗑️ Excluir</button>
+                    </div>
+                `;
+                container.appendChild(productDiv);
             });
         }
 
         async function adicionarProduto() {
             const nome = document.getElementById('novoProdutoNome').value.trim();
             const valor = parseFloat(document.getElementById('novoProdutoValor').value);
-            if (!nome || isNaN(valor)) { alert('Preencha todos os campos!'); return; }
-            const novoId = Math.max(...userData.produtos.map(p => p.id), 0) + 1;
+            
+            if (!nome || isNaN(valor) || valor <= 0) { 
+                alert('Preencha todos os campos corretamente!'); 
+                return; 
+            }
+            
+            const novoId = userData.produtos.length > 0 ? Math.max(...userData.produtos.map(p => p.id)) + 1 : 1;
             userData.produtos.push({ id: novoId, nome, valor });
             await salvarDadosUsuario();
+            
             document.getElementById('novoProdutoNome').value = '';
             document.getElementById('novoProdutoValor').value = '';
             atualizarListaProdutosModal();
-            alert('Produto adicionado!');
+            alert('✅ Produto adicionado com sucesso!');
         }
 
         async function editarProduto(id) {
             const produto = userData.produtos.find(p => p.id === id);
-            const novoNome = prompt('Novo nome:', produto.nome);
-            const novoValor = parseFloat(prompt('Novo valor:', produto.valor));
-            if (novoNome && !isNaN(novoValor)) {
-                produto.nome = novoNome;
-                produto.valor = novoValor;
-                await salvarDadosUsuario();
-                atualizarListaProdutosModal();
-                alert('Produto atualizado!');
+            if (!produto) return;
+            
+            const novoNome = prompt('✏️ Editar nome do produto:', produto.nome);
+            if (!novoNome) return;
+            
+            const novoValor = parseFloat(prompt('💰 Editar valor do produto (R$):', produto.valor));
+            if (isNaN(novoValor) || novoValor <= 0) {
+                alert('Valor inválido!');
+                return;
             }
+            
+            produto.nome = novoNome;
+            produto.valor = novoValor;
+            await salvarDadosUsuario();
+            atualizarListaProdutosModal();
+            alert('✅ Produto atualizado com sucesso!');
         }
 
         async function excluirProduto(id) {
-            if (confirm('Excluir este produto?')) {
+            const produto = userData.produtos.find(p => p.id === id);
+            if (!produto) return;
+            
+            const confirmacao = confirm(`⚠️ Tem certeza que deseja excluir o produto "${produto.nome}"?\n\nEsta ação não pode ser desfeita!`);
+            
+            if (confirmacao) {
                 userData.produtos = userData.produtos.filter(p => p.id !== id);
                 await salvarDadosUsuario();
                 atualizarListaProdutosModal();
-                alert('Produto excluído!');
+                alert('✅ Produto excluído com sucesso!');
             }
         }
 
         // ==================== REGISTRAR VENDA ====================
         function abrirModalVenda() {
+            if (!userData.produtos || userData.produtos.length === 0) {
+                alert('⚠️ Cadastre pelo menos um produto antes de registrar uma venda!');
+                return;
+            }
+            
             const select = document.getElementById('vendaProduto');
-            select.innerHTML = userData.produtos.map(p => `<option value='${p.id}' data-valor='${p.valor}'>${p.nome} - R$ ${p.valor.toFixed(2)}</option>`).join('');
+            select.innerHTML = userData.produtos.map(p => `<option value='${p.id}'>${p.nome} - R$ ${p.valor.toFixed(2).replace('.', ',')}</option>`).join('');
             document.getElementById('modalVenda').style.display = 'flex';
             document.getElementById('vendaQuantidade').value = '1';
             previewTotal();
@@ -1054,9 +1310,11 @@
             const produtoId = document.getElementById('vendaProduto').value;
             const qtd = parseInt(document.getElementById('vendaQuantidade').value) || 0;
             const produto = userData.produtos.find(p => p.id == produtoId);
-            if (produto) {
+            if (produto && qtd > 0) {
                 const total = produto.valor * qtd;
-                document.getElementById('vendaTotalPreview').innerHTML = `Total: R$ ${total.toFixed(2).replace('.', ',')}`;
+                document.getElementById('vendaTotalPreview').innerHTML = `💰 Total da venda: R$ ${total.toFixed(2).replace('.', ',')}`;
+            } else {
+                document.getElementById('vendaTotalPreview').innerHTML = '💰 Total da venda: R$ 0,00';
             }
         }
 
@@ -1064,10 +1322,14 @@
             const produtoId = parseInt(document.getElementById('vendaProduto').value);
             const qtd = parseInt(document.getElementById('vendaQuantidade').value);
             const produto = userData.produtos.find(p => p.id === produtoId);
-            if (!produto || qtd <= 0) { alert('Selecione um produto e quantidade válida!'); return; }
+            
+            if (!produto || qtd <= 0) { 
+                alert('Selecione um produto e quantidade válida!'); 
+                return; 
+            }
             
             const novaVenda = {
-                id: Math.max(...userData.vendas.map(v => v.id), 0) + 1,
+                id: userData.vendas.length > 0 ? Math.max(...userData.vendas.map(v => v.id)) + 1 : 1,
                 produto_id: produto.id,
                 produto_nome: produto.nome,
                 quantidade: qtd,
@@ -1081,43 +1343,75 @@
             await salvarDadosUsuario();
             fecharModal('modalVenda');
             atualizarTabelaVendas();
-            alert('Venda registrada!');
+            alert('✅ Venda registrada com sucesso!');
         }
 
         // ==================== EXCLUIR VENDA ====================
         function abrirModalExcluirVenda() {
             const vendasAtivas = userData.vendas.filter(v => !v.cancelada);
-            if (vendasAtivas.length === 0) { alert('Não há vendas ativas para excluir!'); return; }
+            if (vendasAtivas.length === 0) { 
+                alert('⚠️ Não há vendas ativas para excluir!'); 
+                return; 
+            }
+            
             const select = document.getElementById('excluirVendaSelect');
-            select.innerHTML = vendasAtivas.map(v => `<option value='${v.id}'>#${v.id} - ${v.produto_nome} - ${v.quantidade}und - R$ ${v.valor_total.toFixed(2)}</option>`).join('');
+            select.innerHTML = vendasAtivas.map(v => `<option value='${v.id}'>#${v.id} - ${v.produto_nome} - ${v.quantidade}und - R$ ${v.valor_total.toFixed(2).replace('.', ',')}</option>`).join('');
             document.getElementById('modalExcluir').style.display = 'flex';
         }
 
         async function excluirVenda() {
             const vendaId = parseInt(document.getElementById('excluirVendaSelect').value);
-            if (confirm('Excluir permanentemente esta venda? Esta ação não pode ser desfeita!')) {
+            const venda = userData.vendas.find(v => v.id === vendaId);
+            
+            if (!venda) return;
+            
+            const confirmacao = confirm(`⚠️ Tem certeza que deseja excluir a venda #${vendaId}?\n\nProduto: ${venda.produto_nome}\nValor: R$ ${venda.valor_total.toFixed(2).replace('.', ',')}\n\nEsta ação não pode ser desfeita!`);
+            
+            if (confirmacao) {
                 userData.vendas = userData.vendas.filter(v => v.id !== vendaId);
                 await salvarDadosUsuario();
                 fecharModal('modalExcluir');
                 atualizarTabelaVendas();
-                alert('Venda excluída!');
+                alert('✅ Venda excluída com sucesso!');
             }
         }
 
         // ==================== UTILITÁRIOS ====================
-        function fecharModal(id) { document.getElementById(id).style.display = 'none'; }
+        function fecharModal(id) { 
+            const modal = document.getElementById(id);
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
 
         function switchTab(tab) {
-            document.getElementById('PrecificadorPage').classList.toggle('active', tab === 'Precificador');
-            document.getElementById('vendasPage').classList.toggle('active', tab === 'vendas');
-            document.querySelectorAll('.nav-btn').forEach((btn, i) => btn.classList.toggle('active', (tab === 'Precificador' && i === 0) || (tab === 'vendas' && i === 1)));
-            if (tab === 'vendas') atualizarTabelaVendas();
+            const precificadorPage = document.getElementById('PrecificadorPage');
+            const vendasPage = document.getElementById('vendasPage');
+            const navBtns = document.querySelectorAll('.nav-btn');
+            
+            if (tab === 'Precificador') {
+                precificadorPage.classList.add('active');
+                vendasPage.classList.remove('active');
+                navBtns[0].classList.add('active');
+                navBtns[1].classList.remove('active');
+            } else {
+                precificadorPage.classList.remove('active');
+                vendasPage.classList.add('active');
+                navBtns[0].classList.remove('active');
+                navBtns[1].classList.add('active');
+                atualizarTabelaVendas();
+            }
         }
 
         // Event listeners
-        document.getElementById('vendaProduto').addEventListener('change', previewTotal);
-        document.getElementById('vendaQuantidade').addEventListener('input', previewTotal);
-        window.onclick = e => { if (e.target.classList.contains('modal')) e.target.style.display = 'none'; };
+        document.getElementById('vendaProduto')?.addEventListener('change', previewTotal);
+        document.getElementById('vendaQuantidade')?.addEventListener('input', previewTotal);
+        
+        window.onclick = e => { 
+            if (e.target.classList.contains('modal')) {
+                e.target.style.display = 'none';
+            }
+        };
     </script>
 </body>
 </html>
